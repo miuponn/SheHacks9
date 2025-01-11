@@ -9,72 +9,70 @@ import SwiftUI
 import FirebaseAuth
 
 class AuthViewModel: ObservableObject {
-    @Published var isAuthenticated = false // auth state
-    @Published var isLoading = false // loading state
-    @Published var error: String? // error msg
-    @Published var email = "" // user email
-    @Published var password = "" // user password
+    @Published var email = ""
+    @Published var password = ""
+    @Published var isAuthenticated = false
+    @Published var isLoading = false
+    @Published var error: String?
     
-    private let authManager = AuthManager.shared // shared auth manager
+    private let authManager = AuthManager.shared
     
     init() {
-        authManager.$currentUser // observe current user
-            .map { $0 != nil } // map to auth state
+        // Check if user is already signed in
+        authManager.$currentUser
+            .map { $0 != nil }
             .assign(to: &$isAuthenticated)
-        
-        authManager.$error // observe errors
-            .map { $0?.localizedDescription }
-            .assign(to: &$error)
     }
     
-    // MARK: - Sign In
     func signIn() {
-        isLoading = true // start loading
+        isLoading = true
+        error = nil
+        
         authManager.signIn(email: email, password: password) { [weak self] result in
             DispatchQueue.main.async {
-                self?.isLoading = false // stop loading
+                self?.isLoading = false
                 switch result {
                 case .success:
-                    self?.isAuthenticated = true // set auth state
-                    self?.clearFields() // clear inputs
+                    self?.isAuthenticated = true
+                    self?.clearFields()
                 case .failure(let error):
-                    self?.error = error.localizedDescription // handle error
+                    self?.error = error.localizedDescription
                 }
             }
         }
     }
     
-    // MARK: - Sign Up
     func signUp() {
-        isLoading = true // start loading
+        isLoading = true
+        error = nil
+        
         authManager.signUp(email: email, password: password) { [weak self] result in
             DispatchQueue.main.async {
-                self?.isLoading = false // stop loading
+                self?.isLoading = false
                 switch result {
                 case .success:
-                    self?.isAuthenticated = true // set auth state
-                    self?.clearFields() // clear inputs
+                    self?.isAuthenticated = true
+                    self?.clearFields()
                 case .failure(let error):
-                    self?.error = error.localizedDescription // handle error
+                    self?.error = error.localizedDescription
                 }
             }
         }
     }
     
-    // MARK: - Sign Out
     func signOut() {
         do {
-            try authManager.signOut() // attempt sign out
-            isAuthenticated = false // reset auth state
+            try authManager.signOut()
+            isAuthenticated = false
+            clearFields()
         } catch {
-            self.error = error.localizedDescription // handle error
+            self.error = error.localizedDescription
         }
     }
     
-    // MARK: - Clear Fields
     private func clearFields() {
-        email = "" // reset email
-        password = "" // reset password
-        error = nil // reset error
+        email = ""
+        password = ""
+        error = nil
     }
 }
