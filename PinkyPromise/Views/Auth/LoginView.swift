@@ -113,7 +113,6 @@ struct LoginView: View {
         }
     }
 }
-
 // Preview for testing UI
 #Preview {
     LoginView()
