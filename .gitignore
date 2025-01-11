@@ -1,0 +1,22 @@
+# User-specific files
+*.xcuserdata
+*.xcscmblueprint
+*.xccheckout
+
+# Build artifacts
+build/
+DerivedData/
+
+# Dependency management
+Pods/
+Carthage/Build/
+.swiftpm/
+.build/
+Package.resolved
+
+# Firebase
+GoogleService-Info.plist
+
+# macOS system files
+.DS_Store
+.env
