@@ -7,58 +7,82 @@
 import Foundation
 
 class GroupViewModel: ObservableObject {
-    @Published var groups: [Group] = []
-    @Published var error: Error?
-    
     private let groupManager = GroupManager()
     
-    func createNewGroup(name: String) {
+    @Published var groups: [Group] = []
+    @Published var selectedGroup: Group?
+    @Published var groupStats: (wins: Int, losses: Int)?
+    @Published var error: AppError?
+    @Published var isLoading = false
+    
+    // For group creation
+    @Published var newGroupName = ""
+    
+    func createGroup() {
+        guard !newGroupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            error = GroupError.invalidName
+            return
+        }
+        
+        isLoading = true
         Task {
             do {
-                try await groupManager.createGroup(name: name)
-                await loadUserGroups()
+                let _ = try await groupManager.createGroup(name: newGroupName)
+                await loadGroups()
+                await MainActor.run {
+                    newGroupName = ""
+                    isLoading = false
+                }
             } catch {
                 await MainActor.run {
-                    self.error = error
+                    self.error = error as? AppError ?? GroupError.creationFailed(error)
+                    isLoading = false
                 }
             }
         }
     }
     
-    func joinExistingGroup(groupId: String) {
-        Task {
-            do {
-                try await groupManager.joinGroup(groupId: groupId)
-                await loadUserGroups()
-            } catch {
-                await MainActor.run {
-                    self.error = error
-                }
-            }
-        }
-    }
-    
-    func loadUserGroups() async {
+    func loadGroups() async {
+        isLoading = true
         do {
             let userGroups = try await groupManager.getUserGroups()
             await MainActor.run {
                 self.groups = userGroups
+                isLoading = false
             }
         } catch {
             await MainActor.run {
-                self.error = error
+                self.error = error as? AppError ?? GroupError.notFound
+                isLoading = false
             }
         }
     }
     
-    func addMemberToGroup(groupId: String, userId: String) {
+    func joinGroup(groupId: String) {
+        isLoading = true
         Task {
             do {
-                try await groupManager.addMember(groupId: groupId, userId: userId)
-                await loadUserGroups()
+                try await groupManager.joinGroup(groupId: groupId)
+                await loadGroups()
             } catch {
                 await MainActor.run {
-                    self.error = error
+                    self.error = error as? AppError ?? GroupError.updateFailed(error)
+                    isLoading = false
+                }
+            }
+        }
+    }
+    
+    func loadGroupStats(groupId: String) {
+        Task {
+            do {
+                let stats = try await groupManager.getGroupStats(groupId: groupId)
+                await MainActor.run {
+                    self.groupStats = stats
+                }
+            } catch {
+                await MainActor.run {
+                    self.error = error as? AppError ?? GroupError.notFound
                 }
             }
         }

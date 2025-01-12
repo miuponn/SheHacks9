@@ -4,60 +4,87 @@
 //
 //  Created by Kelly Gao on 2025-01-11.
 //
+import Foundation
 import FirebaseFirestore
 import FirebaseAuth
+import Combine
 
 class UserManager: ObservableObject {
-    private let db = Firestore.firestore()
-    @Published var currentUser: User?
-    @Published var error: Error?
+    // MARK: - Singleton Instance
+    static let shared = UserManager()
     
-    // Get current user's profile
+    // MARK: - Properties
+    private let db = Firestore.firestore()
+    private let auth = Auth.auth()
+    
+    @Published var currentUser: User?
+    @Published var error: AppError?
+    
+    private var listener: ListenerRegistration?
+    
+    // MARK: - Initializer
+    private init() {
+        fetchCurrentUser()
+    }
+    
+    deinit {
+        listener?.remove()
+    }
+    
+    // MARK: - User Operations
+    
+    /// Fetches the current authenticated user's profile.
     func getCurrentUserProfile() async throws -> User {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            throw UserError.notAuthenticated
+        guard let userId = auth.currentUser?.uid else {
+            throw AppError.notAuthenticated
         }
         
         let document = try await db.collection("users").document(userId).getDocument()
         guard let user = try? document.data(as: User.self) else {
-            throw UserError.profileNotFound
-        }
-        
-        DispatchQueue.main.async {
-            self.currentUser = user
+            throw AppError.userNotFound
         }
         return user
     }
     
-    // Update user stats (called after bet completion)
-    func updateUserStats(userId: String, betWon: Bool) async throws {
-        let userRef = db.collection("users").document(userId)
-        
-        if betWon {
-            try await userRef.updateData([
-                "betsWon": FieldValue.increment(Int64(1))
-            ])
-        } else {
-            try await userRef.updateData([
-                "betsLost": FieldValue.increment(Int64(1))
-            ])
+    /// Updates the current user's profile.
+    func updateUserProfile(_ updatedProfile: UserProfile) async throws {
+        guard let userId = auth.currentUser?.uid else {
+            throw AppError.notAuthenticated
         }
+        
+        let userRef = db.collection("users").document(userId)
+        try await userRef.updateData([
+            "username": updatedProfile.username,
+            "email": updatedProfile.email,
+            "profilePhotoURL": updatedProfile.profilePhotoURL ?? "",
+            "betsWon": updatedProfile.betsWon,
+            "betsLost": updatedProfile.betsLost
+        ])
     }
     
-    // Join a group
-    func joinGroup(groupId: String) async throws {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            throw UserError.notAuthenticated
+    // MARK: - Listener Setup
+    
+    /// Sets up a Firestore listener for the current user's document.
+    private func fetchCurrentUser() {
+        guard let userId = auth.currentUser?.uid else {
+            self.currentUser = nil
+            return
         }
         
-        // Add user to group
-        try await db.collection("groups").document(groupId).updateData([
-            "members": FieldValue.arrayUnion([userId])
-        ])
-        
-        // Add group to user's groups
-        try await db.collection("users").document(userId).updateData([
-            "groups": FieldValue.arrayUnion([groupId])
-        ])
+        listener = db.collection("users").document(userId).addSnapshotListener { [weak self] documentSnapshot, error in
+            guard let self = self else { return }
+            
+            if let error = error {
+                self.error = AppError.firestoreError(error)
+                return
+            }
+            
+            guard let document = documentSnapshot, document.exists else {
+                self.error = AppError.userNotFound
+                return
+            }
+            
+            self.currentUser = try? document.data(as: User.self)
+        }
     }
 }

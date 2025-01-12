@@ -4,137 +4,203 @@
 //
 //  Created by Kelly Gao on 2025-01-11.
 //
-
+// Managers/AuthManager.swift
 import FirebaseAuth
 import FirebaseFirestore
+import Combine
 
 class AuthManager: ObservableObject {
     static let shared = AuthManager()
     private let auth = Auth.auth()
     private let db = Firestore.firestore()
+    private let service = FirebaseService.shared
+    private var listeners: [String: ListenerRegistration] = [:]
     
     @Published var currentUser: User?
     @Published var userProfile: UserProfile?
     @Published var error: AuthError?
+    @Published var isLoading = false
     
     private init() {
         setupAuthStateListener()
     }
     
+    // MARK: - Auth State Management
     private func setupAuthStateListener() {
         auth.addStateDidChangeListener { [weak self] (_, firebaseUser) in
             if let firebaseUser = firebaseUser {
-                let user = User(from: firebaseUser)
-                self?.currentUser = user
-                self?.fetchUserProfile(userId: user.id)
+                self?.fetchUserProfile(userId: firebaseUser.uid)
             } else {
-                self?.currentUser = nil
-                self?.userProfile = nil
-            }
-        }
-    }
-    
-    func signUp(email: String, password: String, completion: @escaping (Result<UserProfile, AuthError>) -> Void) {
-        auth.createUser(withEmail: email, password: password) { [weak self] result, error in
-            if let error = error {
-                completion(.failure(.signUpFailed(error)))
-                return
-            }
-            
-            if let firebaseUser = result?.user {
-                let user = User(from: firebaseUser)
-                self?.createUserProfile(from: user) { result in
-                    completion(result)
+                DispatchQueue.main.async {
+                    self?.currentUser = nil
+                    self?.userProfile = nil
+                    self?.removeAllListeners()
                 }
             }
         }
     }
     
-    func signIn(email: String, password: String, completion: @escaping (Result<UserProfile, AuthError>) -> Void) {
-        auth.signIn(withEmail: email, password: password) { [weak self] result, error in
-            if let error = error {
-                completion(.failure(.signInFailed(error)))
-                return
+    // MARK: - Authentication
+    func signUp(email: String, password: String, displayName: String? = nil) async throws -> User {
+        do {
+            isLoading = true
+            let result = try await auth.createUser(withEmail: email, password: password)
+            
+            let user = User(
+                id: result.user.uid,
+                email: email,
+                displayName: displayName,
+                createdAt: Date(),
+                lastActive: Date()
+            )
+            
+            try await createUserProfile(user)
+            
+            await MainActor.run {
+                self.currentUser = user
+                self.isLoading = false
             }
             
-            if let firebaseUser = result?.user {
-                self?.fetchUserProfile(userId: firebaseUser.uid) { result in
-                    switch result {
-                    case .success(let profile):
-                        completion(.success(profile))
-                    case .failure(let error):
-                        completion(.failure(error))
+            return user
+        } catch {
+            await MainActor.run {
+                self.error = .signUpFailed(error)
+                self.isLoading = false
+            }
+            throw error
+        }
+    }
+    
+    func signIn(email: String, password: String) async throws {
+        do {
+            isLoading = true
+            let result = try await auth.signIn(withEmail: email, password: password)
+            try await fetchUserProfile(userId: result.user.uid)
+            
+            await MainActor.run {
+                self.isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                self.error = .signInFailed(error)
+                self.isLoading = false
+            }
+            throw error
+        }
+    }
+    
+    func signOut() async throws {
+        do {
+            try auth.signOut()
+            await MainActor.run {
+                self.currentUser = nil
+                self.userProfile = nil
+                removeAllListeners()
+            }
+        } catch {
+            self.error = .signOutFailed(error)
+            throw error
+        }
+    }
+    
+    // MARK: - Profile Management
+    private func createUserProfile(_ user: User) async throws {
+        let userRef = db.collection(FirestoreKeys.users).document(user.id ?? "")
+        try await userRef.setData(from: user)
+        
+        await MainActor.run {
+            self.currentUser = user
+        }
+        
+        setupUserListeners(userId: user.id ?? "")
+    }
+    
+    private func fetchUserProfile(userId: String) async throws {
+        let docRef = db.collection(FirestoreKeys.users).document(userId)
+        let snapshot = try await docRef.getDocument()
+        
+        guard let user = try? snapshot.data(as: User.self) else {
+            throw AuthError.profileNotFound
+        }
+        
+        await MainActor.run {
+            self.currentUser = user
+        }
+        
+        setupUserListeners(userId: userId)
+        
+        // Refresh local cache
+        try await service.refreshCache(userId: userId)
+    }
+    
+    // MARK: - Listeners
+    private func setupUserListeners(userId: String) {
+        // Listen for user profile updates
+        let userListener = db.collection(FirestoreKeys.users)
+            .document(userId)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let document = snapshot else { return }
+                
+                if let error = error {
+                    self?.error = .profileUpdateFailed(error)
+                    return
+                }
+                
+                if let updatedUser = try? document.data(as: User.self) {
+                    DispatchQueue.main.async {
+                        self?.currentUser = updatedUser
                     }
                 }
             }
-        }
+        
+        listeners["userProfile"] = userListener
     }
     
-    private func createUserProfile(from user: User, completion: @escaping (Result<UserProfile, AuthError>) -> Void) {
-        let profile = UserProfile(from: user)
-        let userRef = db.collection("users").document(user.id)
+    // MARK: - Updates
+    func updateProfile(displayName: String?) async throws {
+        guard let userId = currentUser?.id else {
+            throw AuthError.notAuthenticated
+        }
         
+        let userRef = db.collection(FirestoreKeys.users).document(userId)
+        try await userRef.updateData([
+            "displayName": displayName as Any,
+            "lastUpdated": FieldValue.serverTimestamp()
+        ])
+    }
+    
+    func updateLastActive() async throws {
+        guard let userId = currentUser?.id else { return }
+        
+        try await db.collection(FirestoreKeys.users).document(userId).updateData([
+            "lastActive": FieldValue.serverTimestamp()
+        ])
+    }
+    
+    // MARK: - Password Reset
+    func resetPassword(email: String) async throws {
         do {
-            try userRef.setData(from: profile) { error in
-                if let error = error {
-                    completion(.failure(.profileCreationFailed(error)))
-                } else {
-                    completion(.success(profile))
-                }
-            }
+            try await auth.sendPasswordReset(withEmail: email)
         } catch {
-            completion(.failure(.profileCreationFailed(error)))
+            self.error = .passwordResetFailed(error)
+            throw error
         }
     }
     
-    private func fetchUserProfile(userId: String, completion: ((Result<UserProfile, AuthError>) -> Void)? = nil) {
-        let userRef = db.collection("users").document(userId)
-        
-        userRef.getDocument { [weak self] document, error in
-            if let error = error {
-                completion?(.failure(.profileFetchFailed(error)))
-                return
-            }
-            
-            if let data = document?.data() {
-                do {
-                    let profile = try UserProfile(from: data)
-                    self?.userProfile = profile
-                    completion?(.success(profile))
-                } catch {
-                    completion?(.failure(.profileDecodingFailed(error)))
-                }
-            } else {
-                completion?(.failure(.profileNotFound))
-            }
-        }
-    }
-    
-    func signOut() throws {
-        try auth.signOut()
-        currentUser = nil
-        userProfile = nil
+    // MARK: - Clean up
+    private func removeAllListeners() {
+        listeners.values.forEach { $0.remove() }
+        listeners.removeAll()
     }
 }
 
-enum AuthError: LocalizedError {
-    case signUpFailed(Error)
-    case signInFailed(Error)
-    case profileCreationFailed(Error)
-    case profileFetchFailed(Error)
-    case profileDecodingFailed(Error)
-    case profileNotFound
-    case notAuthenticated
+// MARK: - Helper Extensions
+extension AuthManager {
+    var isAuthenticated: Bool {
+        currentUser != nil && Auth.auth().currentUser != nil
+    }
     
-    var errorDescription: String? {
-        switch self {
-        case .signUpFailed(let error): return "Failed to sign up: \(error.localizedDescription)"
-        case .signInFailed(let error): return "Failed to sign in: \(error.localizedDescription)"
-        case .profileCreationFailed(let error): return "Failed to create profile: \(error.localizedDescription)"
-        case .profileFetchFailed(let error): return "Failed to fetch profile: \(error.localizedDescription)"
-        case .profileDecodingFailed(let error): return "Failed to decode profile: \(error.localizedDescription)"
-        case .profileNotFound: return "User profile not found"
-        case .notAuthenticated: return "User not authenticated"
-        }
+    var userId: String? {
+        currentUser?.id
     }
 }

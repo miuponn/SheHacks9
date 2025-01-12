@@ -4,17 +4,92 @@
 //
 //  Created by Kelly Gao on 2025-01-11.
 //
+
+import Foundation
 import FirebaseFirestore
 import FirebaseAuth
+import Combine
 
 class BetManager: ObservableObject {
-    private let db = Firestore.firestore()
-    @Published var error: Error?
+    // MARK: - Singleton Instance
+    static let shared = BetManager()
     
-    // Create a new bet
+    // MARK: - Properties
+    private let db = Firestore.firestore()
+    private let auth = Auth.auth()
+    
+    @Published var activeBets: [Bet] = []
+    @Published var pendingBets: [Bet] = []
+    @Published var completedBets: [Bet] = []
+    @Published var error: AppError?
+    
+    private var listeners: [String: ListenerRegistration] = [:]
+    
+    // MARK: - Initializer
+    private init() {
+        setupListeners()
+    }
+    
+    deinit {
+        removeAllListeners()
+    }
+    
+    // MARK: - Listeners Setup
+    private func setupListeners() {
+        guard let userId = auth.currentUser?.uid else { return }
+        
+        // Active Bets Listener
+        let activeBetsListener = db.collection("bets")
+            .whereField("participants", arrayContains: userId)
+            .whereField("status", isEqualTo: BetStatus.active.rawValue)
+            .order(by: "endDate", descending: false)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self = self else { return }
+                if let error = error {
+                    self.error = AppError.firestoreError(error)
+                    return
+                }
+                self.activeBets = snapshot?.documents.compactMap { try? $0.data(as: Bet.self) } ?? []
+            }
+        listeners["active"] = activeBetsListener
+        
+        // Pending Bets Listener
+        let pendingBetsListener = db.collection("bets")
+            .whereField("participants", arrayContains: userId)
+            .whereField("status", isEqualTo: BetStatus.pending.rawValue)
+            .order(by: "endDate", descending: false)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self = self else { return }
+                if let error = error {
+                    self.error = AppError.firestoreError(error)
+                    return
+                }
+                self.pendingBets = snapshot?.documents.compactMap { try? $0.data(as: Bet.self) } ?? []
+            }
+        listeners["pending"] = pendingBetsListener
+        
+        // Completed Bets Listener
+        let completedBetsListener = db.collection("bets")
+            .whereField("participants", arrayContains: userId)
+            .whereField("status", isEqualTo: BetStatus.completed.rawValue)
+            .order(by: "endDate", descending: true)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self = self else { return }
+                if let error = error {
+                    self.error = AppError.firestoreError(error)
+                    return
+                }
+                self.completedBets = snapshot?.documents.compactMap { try? $0.data(as: Bet.self) } ?? []
+            }
+        listeners["completed"] = completedBetsListener
+    }
+    
+    // MARK: - Bet Operations
+    
+    /// Creates a new bet.
     func createBet(prompt: String, amount: Double, endDate: Date, groupId: String? = nil) async throws -> String {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            throw BetError.notAuthenticated
+        guard let userId = auth.currentUser?.uid else {
+            throw AppError.notAuthenticated
         }
         
         let betRef = db.collection("bets").document()
@@ -22,112 +97,97 @@ class BetManager: ObservableObject {
             id: betRef.documentID,
             prompt: prompt,
             amount: amount,
-            creator: userId,
+            creatorId: userId,
             createdAt: Date(),
             startDate: Date(),
             endDate: endDate,
             participants: [userId],
             votes: [:],
             status: .pending,
-            groupId: groupId
+            groupId: groupId,
+            result: nil,
+            lastUpdated: Date(),
+            lastChecked: Date()
         )
         
         try await betRef.setData(from: bet)
         
-        // If part of a group, update group's active bets
+        // If group-based, add bet to group's activeBets and send invitations
         if let groupId = groupId {
             try await db.collection("groups").document(groupId).updateData([
                 "activeBets": FieldValue.arrayUnion([betRef.documentID])
             ])
+            
+            // Send invitations to group members (excluding creator)
+            try await InvitationManager.shared.sendBetInvitesToGroup(betId: betRef.documentID, groupId: groupId)
         }
-        
-        // Update user's current bets
-        try await db.collection("users").document(userId).updateData([
-            "currentBets": FieldValue.arrayUnion([betRef.documentID])
-        ])
         
         return betRef.documentID
     }
     
-    // Vote on a bet
+    /// Allows a user to vote on a bet.
     func voteBet(betId: String, vote: Bool) async throws {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            throw BetError.notAuthenticated
+        guard let userId = auth.currentUser?.uid else {
+            throw AppError.notAuthenticated
         }
         
         let betRef = db.collection("bets").document(betId)
         
-        try await betRef.updateData([
-            "votes.\(userId)": vote,
-            "participants": FieldValue.arrayUnion([userId]),
-            "status": BetStatus.active.rawValue
-        ])
+        try await db.runTransaction { transaction, errorPointer in
+            let betDoc = try transaction.getDocument(betRef)
+            guard var bet = try? betDoc.data(as: Bet.self) else {
+                throw AppError.betNotFound
+            }
+            
+            if bet.votes[userId] != nil {
+                throw AppError.alreadyVoted
+            }
+            
+            bet.votes[userId] = vote
+            bet.status = .active // Update status upon first vote
+            bet.lastUpdated = Date()
+            
+            try transaction.setData(from: bet, forDocument: betRef)
+            return
+        }
     }
     
-    // Get user's active bets
+    /// Completes a bet by determining the result based on votes.
+    func completeBet(_ bet: Bet, withResult result: Bool) async throws {
+        guard let betId = bet.id else { return }
+        
+        try await db.collection("bets").document(betId).updateData([
+            "status": BetStatus.completed.rawValue,
+            "result": result,
+            "lastUpdated": FieldValue.serverTimestamp()
+        ])
+        
+        // Update user stats
+        for (userId, vote) in bet.votes {
+            try await FirebaseService.shared.updateStats(userId: userId, groupId: bet.groupId, betResult: (vote == result))
+        }
+    }
+    
+    /// Fetches all bets associated with the current user.
     func getUserBets() async throws -> [Bet] {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            throw BetError.notAuthenticated
+        guard let userId = auth.currentUser?.uid else {
+            throw AppError.notAuthenticated
         }
         
         let snapshot = try await db.collection("bets")
             .whereField("participants", arrayContains: userId)
+            .order(by: "endDate", descending: true)
+            .limit(to: 20)
             .getDocuments()
         
-        return try snapshot.documents.compactMap { try $0.data(as: Bet.self) }
+        return snapshot.documents.compactMap { try? $0.data(as: Bet.self) }
     }
     
-    // Complete a bet and update statistics
-    func completeBet(betId: String, finalOutcome: Bool) async throws {
-        let betRef = db.collection("bets").document(betId)
-        let bet = try await betRef.getDocument(as: Bet.self)
-        
-        // Update bet status
-        try await betRef.updateData([
-            "status": BetStatus.completed.rawValue
-        ])
-        
-        // Update user statistics
-        for (userId, vote) in bet.votes {
-            let userRef = db.collection("users").document(userId)
-            if vote == finalOutcome {
-                try await userRef.updateData([
-                    "betsWon": FieldValue.increment(Int64(1)),
-                    "currentBets": FieldValue.arrayRemove([betId])
-                ])
-            } else {
-                try await userRef.updateData([
-                    "betsLost": FieldValue.increment(Int64(1)),
-                    "currentBets": FieldValue.arrayRemove([betId])
-                ])
-            }
-        }
-        
-        // If part of a group, update group bets
-        if let groupId = bet.groupId {
-            try await db.collection("groups").document(groupId).updateData([
-                "activeBets": FieldValue.arrayRemove([betId]),
-                "completedBets": FieldValue.arrayUnion([betId])
-            ])
-        }
-    }
-    enum BetError: LocalizedError {
-        case notAuthenticated
-        case invalidBet
-        case betNotFound
-        case alreadyVoted
-        
-        var errorDescription: String? {
-            switch self {
-            case .notAuthenticated:
-                return "User not authenticated"
-            case .invalidBet:
-                return "Invalid bet data"
-            case .betNotFound:
-                return "Bet not found"
-            case .alreadyVoted:
-                return "Already voted on this bet"
-            }
-        }
+    // MARK: - Helper Methods
+    
+    /// Removes all active Firestore listeners.
+    private func removeAllListeners() {
+        listeners.values.forEach { $0.remove() }
+        listeners.removeAll()
     }
 }

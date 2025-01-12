@@ -6,26 +6,32 @@
 //
 import SwiftUI
 struct MainTabView: View {
+    @EnvironmentObject var authViewModel: AuthViewModel
+    
     var body: some View {
         TabView {
             DashboardView()
                 .tabItem {
-                    Label("Home", systemImage: "house")
+                    Label("Home", systemImage: "house.fill")
                 }
             
             GroupsView()
                 .tabItem {
-                    Label("Groups", systemImage: "person.2")
+                    Label("Groups", systemImage: "person.2.fill")
                 }
             
+<<<<<<< HEAD
             BetCreationView()
+=======
+            BetCreationView() // Updated from CreateBetView
+>>>>>>> ec40fdc (Temp changes)
                 .tabItem {
                     Image(systemName: "plus.circle.fill")
                 }
             
             ProfileView()
                 .tabItem {
-                    Label("Profile", systemImage: "person.circle")
+                    Label("Profile", systemImage: "person.circle.fill")
                 }
         }
     }

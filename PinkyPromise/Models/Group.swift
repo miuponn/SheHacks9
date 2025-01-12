@@ -4,14 +4,14 @@
 //
 //  Created by Kelly Gao on 2025-01-11.
 //
-import SwiftUI
+import Foundation
+import FirebaseFirestore
 
-struct Group: Codable, Identifiable {
-    let id: String
-    let name: String
-    let creator: String // User ID
-    var members: [String] // User IDs
-    var activeBets: [String] // Bet IDs
-    var completedBets: [String] // Bet IDs
-    let createdAt: Date
+struct Group: Identifiable, Codable {
+    @DocumentID var id: String? // Firestore document ID
+    var name: String
+    var creatorId: String // User ID of the group creator
+    var members: [String] // Array of User IDs
+    var createdAt: Date
+    var activeBets: [String] // Array of Bet IDs
 }

@@ -1,13 +1,19 @@
 import SwiftUI
 import PhotosUI
 
+<<<<<<< HEAD
 extension Font {
     static func customFont(size: CGFloat) -> Font {
         return Font.custom("NewYorkMedium-Regular", size: size)
     }
 }
 
+=======
+>>>>>>> ec40fdc (Temp changes)
 struct BetCreationView: View {
+    @StateObject private var viewModel = BetViewModel()
+    
+    // Keep original @State properties for view-specific state
     @State private var betPrompt: String = ""
     @State private var betAmount: String = ""
     @State private var options: [String] = [""]
@@ -71,6 +77,9 @@ struct BetCreationView: View {
                                 .fontWeight(.medium)
                             TextField("Enter bet prompt", text: $betPrompt)
                                 .textFieldStyle(UnderlinedTextFieldStyle())
+                                .onChange(of: betPrompt) { newValue in
+                                    viewModel.betPrompt = newValue
+                                }
                         }
                         
                         // Bet Amount Section
@@ -80,6 +89,9 @@ struct BetCreationView: View {
                                 .fontWeight(.medium)
                             TextField("Enter bet amount", text: $betAmount)
                                 .textFieldStyle(UnderlinedTextFieldStyle())
+                                .onChange(of: betAmount) { newValue in
+                                    viewModel.betAmount = newValue
+                                }
                         }
                         
                         // Options Section
@@ -147,25 +159,24 @@ struct BetCreationView: View {
                             .textFieldStyle(UnderlinedTextFieldStyle())
                         }
                         
-                    } // End of main content VStack
-                    
-                    Spacer(minLength: 20)
-                    
-                    // Submit Button
-                    Button(action: handleSubmit) {
-                        Text("Submit")
-                            .font(.customFont(size: 20))
-                            .fontWeight(.medium)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 15)
-                                    .fill(Color(red: 0.2, green: 0.4, blue: 0.3))
-                            )
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, geometry.safeAreaInsets.bottom + 20)
+                        // Create Button
+                        Button(action: {
+                            // Update viewModel with current values
+                            viewModel.options = options
+                            viewModel.startDate = startDate
+                            viewModel.endDate = endDate
+                            viewModel.createNewBet()
+                        }) {
+                            Text("Create Bet")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color(red: 0.2, green: 0.4, blue: 0.3))
+                                .cornerRadius(10)
+                        }
+                        .disabled(viewModel.isLoading)
+                        .padding(.top, 20)
                     }
                 }
                 .padding(.horizontal, max(geometry.size.width * 0.1, 20))
@@ -186,6 +197,7 @@ struct BetCreationView: View {
                     )
                 }
             }
+<<<<<<< HEAD
             .alert(isPresented: $showAlert) {
                 Alert(
                     title: Text("Form Status"),
@@ -193,6 +205,15 @@ struct BetCreationView: View {
                     dismissButton: .default(Text("OK"))
                 )
             }
+=======
+            .onChange(of: startDate) { newValue in
+                viewModel.startDate = newValue
+            }
+            .onChange(of: endDate) { newValue in
+                viewModel.endDate = newValue
+            }
+            .errorAlert(error: $viewModel.error)
+>>>>>>> ec40fdc (Temp changes)
         }
     }
     
@@ -249,6 +270,7 @@ struct BetCreationView: View {
     }
 }
 
+// Keep original CustomDatePicker and UnderlinedTextFieldStyle
 struct CustomDatePicker: View {
     @Binding var startDate: Date?
     @Binding var endDate: Date?
