@@ -8,21 +8,21 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var authViewModel = AuthViewModel()
-    
+
     var body: some View {
-        Group {
+        ZStack {
             if authViewModel.isAuthenticated {
                 MainTabView()
                     .environmentObject(authViewModel)
-                    .transition(.opacity) // Smooth transition
+                    .transition(.opacity)
             } else {
                 NavigationView {
                     LoginView()
                         .environmentObject(authViewModel)
+                        .transition(.opacity)
                 }
             }
         }
-        .animation(.default, value: authViewModel.isAuthenticated) // Animate transitions
+        .animation(.easeInOut, value: authViewModel.isAuthenticated) // Smooth transition
     }
 }
-
