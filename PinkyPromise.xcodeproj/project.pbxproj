@@ -57,9 +57,36 @@
 		A29666092D32ECC6005C448F /* PinkyPromise.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; name = PinkyPromise.xctestplan; path = ../PinkyPromise.xctestplan; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		58FF71372D3356AB000DCA9E /* Exceptions for "PinkyPromise" folder in "PinkyPromiseTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"Assets/Fonts/ChewieDEMO-Medium.otf",
+				"Assets/Fonts/ChewieDEMO-Regular.otf",
+				"Assets/Fonts/ChewieDEMO-SemiBold.otf",
+				"Assets/Fonts/ChewieDEMO-Thin.otf",
+			);
+			target = A27B14BF2D32426600B82054 /* PinkyPromiseTests */;
+		};
+		58FF71382D3356AB000DCA9E /* Exceptions for "PinkyPromise" folder in "PinkyPromiseUITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"Assets/Fonts/ChewieDEMO-Medium.otf",
+				"Assets/Fonts/ChewieDEMO-Regular.otf",
+				"Assets/Fonts/ChewieDEMO-SemiBold.otf",
+				"Assets/Fonts/ChewieDEMO-Thin.otf",
+			);
+			target = A27B14C92D32426600B82054 /* PinkyPromiseUITests */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A27B14B22D32426000B82054 /* PinkyPromise */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				58FF71372D3356AB000DCA9E /* Exceptions for "PinkyPromise" folder in "PinkyPromiseTests" target */,
+				58FF71382D3356AB000DCA9E /* Exceptions for "PinkyPromise" folder in "PinkyPromiseUITests" target */,
+			);
 			path = PinkyPromise;
 			sourceTree = "<group>";
 		};

@@ -3,8 +3,8 @@ import SwiftUI
 struct BottomNavBar: View {
     var body: some View {
         HStack(spacing: 40) {
-            NavigationButton(iconName: "house")
-            NavigationButton(iconName: "person.2")
+            BottomNavButton(icon: "house", action: {})
+            BottomNavButton(icon: "person.2", action: {})
             
             // Center Button
             Button(action: {}) {
@@ -19,8 +19,8 @@ struct BottomNavBar: View {
             }
             .offset(y: -20)
             
-            NavigationButton(iconName: "list.clipboard")
-            NavigationButton(iconName: "arrow.clockwise")
+            BottomNavButton(icon: "list.clipboard", action: {})
+            BottomNavButton(icon: "arrow.clockwise", action: {})
         }
         .padding(.horizontal)
         .padding(.bottom, 10)
@@ -28,12 +28,13 @@ struct BottomNavBar: View {
     }
 }
 
-struct NavigationButton: View {
-    let iconName: String
+struct BottomNavButton: View {
+    let icon: String
+    let action: () -> Void
     
     var body: some View {
-        Button(action: {}) {
-            Image(systemName: iconName)
+        Button(action: action) {
+            Image(systemName: icon)
                 .font(.system(size: 24))
                 .foregroundColor(.white)
         }

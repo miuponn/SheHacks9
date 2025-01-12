@@ -1,6 +1,11 @@
 import SwiftUI
 import PhotosUI
 
+extension Font {
+    static func customFont(size: CGFloat) -> Font {
+        return Font.custom("NewYorkMedium-Regular", size: size)
+    }
+}
 
 struct BetCreationView: View {
     @State private var betPrompt: String = ""
@@ -12,18 +17,21 @@ struct BetCreationView: View {
     @State private var displayImage: Image? = nil
     @State private var showCalendar = false
     @State private var isSelectingEndDate = false
+    @State private var showAlert = false
+    @State private var alertMessage = ""
     
     var body: some View {
         GeometryReader { geometry in
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(spacing: 24) {
-                    // Header and other sections remain the same
+                    // Main content container
+                    VStack(spacing: 24) {
                     Text("Create the Bet")
-                        .font(.title)
+                        .font(.customFont(size: 30))
                         .fontWeight(.semibold)
                         .foregroundColor(Color(red: 0.2, green: 0.4, blue: 0.3))
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 20)
+                        .padding(.top, 30)
                     
                     // Profile Picture Button
                     PhotosPicker(selection: $selectedImage, matching: .images) {
@@ -40,7 +48,7 @@ struct BetCreationView: View {
                                     .clipShape(Circle())
                             } else {
                                 Image(systemName: "plus")
-                                    .font(.system(size: 30))
+                                    .font(.system(size: 28))
                                     .foregroundColor(.white)
                             }
                         }
@@ -59,7 +67,7 @@ struct BetCreationView: View {
                         // Bet Prompt Section
                         VStack(alignment: .leading, spacing: 16) {
                             Text("Bet Prompt")
-                                .font(.title3)
+                                .font(.customFont(size: 20))
                                 .fontWeight(.medium)
                             TextField("Enter bet prompt", text: $betPrompt)
                                 .textFieldStyle(UnderlinedTextFieldStyle())
@@ -68,7 +76,7 @@ struct BetCreationView: View {
                         // Bet Amount Section
                         VStack(alignment: .leading, spacing: 16) {
                             Text("Bet Amount/Thing")
-                                .font(.title3)
+                                .font(.customFont(size: 20))
                                 .fontWeight(.medium)
                             TextField("Enter bet amount", text: $betAmount)
                                 .textFieldStyle(UnderlinedTextFieldStyle())
@@ -76,28 +84,40 @@ struct BetCreationView: View {
                         
                         // Options Section
                         VStack(alignment: .leading, spacing: 16) {
-                            Text("Options")
-                                .font(.title3)
-                                .fontWeight(.medium)
-                            
-                            ForEach(0..<options.count, id: \.self) { index in
-                                TextField("Enter option", text: $options[index])
-                                    .textFieldStyle(UnderlinedTextFieldStyle())
+                            HStack(alignment: .center) {
+                                Text("Options")
+                                    .font(.customFont(size: 20))
+                                    .fontWeight(.medium)
+                                
+                                Spacer()
+                                
+                                Button(action: {
+                                    options.append("")
+                                }) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(Color(red: 0.2, green: 0.4, blue: 0.3))
+                                }
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
                             }
+                            .padding(.trailing, -8) // Align with other content
                             
-                            Button(action: {
-                                options.append("")
-                            }) {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(Color(red: 0.2, green: 0.4, blue: 0.3))
+                            ScrollView {
+                                VStack(spacing: 16) {
+                                    ForEach(0..<options.count, id: \.self) { index in
+                                        TextField("Enter option", text: $options[index])
+                                            .textFieldStyle(UnderlinedTextFieldStyle())
+                                    }
+                                }
                             }
+                            .frame(maxHeight: UIScreen.main.bounds.height * 0.3) // Limit height to 30% of screen height
                         }
                         
                         // Duration Section
                         VStack(alignment: .leading, spacing: 16) {
                             Text("Duration")
-                                .font(.title3)
+                                .font(.customFont(size: 20))
                                 .fontWeight(.medium)
                             
                             Button(action: {
@@ -126,6 +146,26 @@ struct BetCreationView: View {
                             }
                             .textFieldStyle(UnderlinedTextFieldStyle())
                         }
+                        
+                    } // End of main content VStack
+                    
+                    Spacer(minLength: 20)
+                    
+                    // Submit Button
+                    Button(action: handleSubmit) {
+                        Text("Submit")
+                            .font(.customFont(size: 20))
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 15)
+                                    .fill(Color(red: 0.2, green: 0.4, blue: 0.3))
+                            )
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, geometry.safeAreaInsets.bottom + 20)
                     }
                 }
                 .padding(.horizontal, max(geometry.size.width * 0.1, 20))
@@ -146,7 +186,59 @@ struct BetCreationView: View {
                     )
                 }
             }
+            .alert(isPresented: $showAlert) {
+                Alert(
+                    title: Text("Form Status"),
+                    message: Text(alertMessage),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
         }
+    }
+    
+    private func handleSubmit() {
+        // Validate form
+        if betPrompt.isEmpty {
+            alertMessage = "Please enter a bet prompt"
+            showAlert = true
+            return
+        }
+        
+        if betAmount.isEmpty {
+            alertMessage = "Please enter a bet amount"
+            showAlert = true
+            return
+        }
+        
+        if options.filter({ !$0.isEmpty }).count < 2 {
+            alertMessage = "Please enter at least two options"
+            showAlert = true
+            return
+        }
+        
+        if startDate == nil || endDate == nil {
+            alertMessage = "Please select both start and end dates"
+            showAlert = true
+            return
+        }
+        
+        // If all validations pass, proceed with submission
+        // Here you would typically call your API or handle the data
+        let betData: [String: Any] = [
+            "prompt": betPrompt,
+            "amount": betAmount,
+            "options": options.filter { !$0.isEmpty },
+            "startDate": startDate as Any,
+            "endDate": endDate as Any,
+            // Add image data if needed
+        ]
+        
+        // For demonstration, show success message
+        alertMessage = "Bet created successfully!"
+        showAlert = true
+        
+        // You can add your API call or data handling here
+        print("Submitted bet data:", betData)
     }
     
     private func formatDate(_ date: Date) -> String {

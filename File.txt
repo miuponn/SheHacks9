@@ -1,0 +1,7 @@
+<key>UIAppFonts</key>
+<array>
+    <string>ChewieDEMO-Medium.ttf</string>
+    <string>ChewieDEMO-Regular.ttf</string>
+    <string>ChewieDEMO-SemiBold.ttf</string>
+    <string>ChewieDEMO-Thin.ttf</string>
+</array>

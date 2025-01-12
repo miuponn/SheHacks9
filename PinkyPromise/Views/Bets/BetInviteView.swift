@@ -1,20 +1,21 @@
 import SwiftUI
 
-struct BetInvitationView: View {
+struct BetAcceptView: View {
     let betPrompt: String
     let betAmount: String
-    let options: [String]
-    let startDate: Date
-    let endDate: Date
+    let creator: String
+    let betLength: Date
     
-    @State private var showShareSheet = false
-    @State private var showAirDrop = false
+    @State private var showAlert = false
+    @State private var alertMessage = ""
     
     private let backgroundColor = Color(red: 0.2, green: 0.4, blue: 0.3)
+    private let acceptColor = Color(red: 0.4, green: 0.7, blue: 0.3)
+    private let declineColor = Color(red: 0.8, green: 0.3, blue: 0.2)
     
     var body: some View {
         VStack(spacing: 24) {
-            Text("Send a Bet Invitation")
+            Text("Bet Invitation")
                 .font(.customFont(size: 30))
                 .fontWeight(.semibold)
                 .foregroundColor(backgroundColor)
@@ -31,9 +32,8 @@ struct BetInvitationView: View {
                     
                     InfoRow(label: "Prompt", value: betPrompt)
                     InfoRow(label: "Bet Amount/Thing", value: betAmount)
-                    InfoRow(label: "Options", value: options.joined(separator: ", "))
-                    InfoRow(label: "Bet Start", value: formatDate(startDate))
-                    InfoRow(label: "Bet End", value: formatDate(endDate))
+                    InfoRow(label: "Creator", value: creator)
+                    InfoRow(label: "Bet Length", value: formatDate(betLength))
                 }
                 .padding(24)
                 .background(
@@ -41,22 +41,23 @@ struct BetInvitationView: View {
                         .fill(backgroundColor)
                 )
                 
-                // Sharing Options Card
+                // Accept/Decline Card
                 VStack(spacing: 16) {
                     Button(action: {
-                        shareLink()
+                        handleAccept()
                     }) {
                         HStack(spacing: 12) {
-                            Image(systemName: "link")
-                            Text("Send invite link")
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 20))
+                            Text("Accept")
                                 .font(.customFont(size: 20))
                                 .fontWeight(.medium)
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.white)
+                        .background(acceptColor)
                         .cornerRadius(25)
-                        .foregroundColor(.black)
+                        .foregroundColor(.white)
                     }
                     
                     Text("or")
@@ -64,19 +65,20 @@ struct BetInvitationView: View {
                         .font(.customFont(size: 18))
                     
                     Button(action: {
-                        showAirDrop = true
+                        handleDecline()
                     }) {
                         HStack(spacing: 12) {
-                            Image(systemName: "paperplane.fill")
-                            Text("AirDrop")
+                            Text("🤷‍♂️")
+                                .font(.system(size: 20))
+                            Text("Decline")
                                 .font(.customFont(size: 20))
                                 .fontWeight(.medium)
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.white)
+                        .background(declineColor)
                         .cornerRadius(25)
-                        .foregroundColor(.black)
+                        .foregroundColor(.white)
                     }
                 }
                 .padding(24)
@@ -87,15 +89,14 @@ struct BetInvitationView: View {
             }
             .padding(.horizontal, 24)
             
-            Text("**Maximum number of 9 people")
-                .font(.footnote)
-                .foregroundColor(.gray)
-                .padding(.horizontal, 24)
-            
             Spacer()
         }
-        .sheet(isPresented: $showShareSheet) {
-            ShareSheet(items: [createShareText()])
+        .alert(isPresented: $showAlert) {
+            Alert(
+                title: Text("Bet Response"),
+                message: Text(alertMessage),
+                dismissButton: .default(Text("OK"))
+            )
         }
     }
     
@@ -105,23 +106,20 @@ struct BetInvitationView: View {
         return formatter.string(from: date)
     }
     
-    private func shareLink() {
-        showShareSheet = true
+    private func handleAccept() {
+        alertMessage = "Bet accepted!"
+        showAlert = true
+        // Add your accept logic here
     }
     
-    private func createShareText() -> String {
-        """
-        New Bet Invitation!
-        Prompt: \(betPrompt)
-        Amount: \(betAmount)
-        Options: \(options.joined(separator: ", "))
-        Start: \(formatDate(startDate))
-        End: \(formatDate(endDate))
-        """
+    private func handleDecline() {
+        alertMessage = "Bet declined"
+        showAlert = true
+        // Add your decline logic here
     }
 }
 
-struct InfoRow: View {
+struct InfomationRow: View {
     let label: String
     let value: String
     
@@ -140,25 +138,14 @@ struct InfoRow: View {
     }
 }
 
-struct ShareSheet: UIViewControllerRepresentable {
-    let items: [Any]
-    
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
-    }
-    
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-}
-
 // Preview
-struct BetInvitationView_Previews: PreviewProvider {
+struct BetAcceptView_Previews: PreviewProvider {
     static var previews: some View {
-        BetInvitationView(
+        BetAcceptView(
             betPrompt: "XYZ",
             betAmount: "$200",
-            options: ["Yes", "No"],
-            startDate: Calendar.current.date(from: DateComponents(year: 2025, month: 1, day: 10)) ?? Date(),
-            endDate: Calendar.current.date(from: DateComponents(year: 2025, month: 1, day: 13)) ?? Date()
+            creator: "XYZ",
+            betLength: Calendar.current.date(from: DateComponents(year: 2025, month: 1, day: 10)) ?? Date()
         )
     }
 }

@@ -18,7 +18,7 @@ struct MainTabView: View {
                     Label("Groups", systemImage: "person.2")
                 }
             
-            CreateBetView()
+            BetCreationView()
                 .tabItem {
                     Image(systemName: "plus.circle.fill")
                 }
