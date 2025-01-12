@@ -20,7 +20,6 @@ struct VotingOptionsView: View {
                 .foregroundColor(greenColor)
                 .padding(.horizontal)
             
-            // Horizontal row of rectangular boxes
             HStack(spacing: 16) {
                 ForEach(Array(options.enumerated()), id: \.element) { index, option in
                     Button(action: {
@@ -61,21 +60,10 @@ struct ScaleButtonStyle: ButtonStyle {
 // Preview
 struct VotingOptionsView_Previews: PreviewProvider {
     static var previews: some View {
-        Group {
-            // Preview with 2 options
-            VotingOptionsView(
-                options: ["Yes", "No"],
-                selectedOption: .constant(nil)
-            )
-            
-            // Preview with more options
-            ScrollView(.horizontal, showsIndicators: false) {
-                VotingOptionsView(
-                    options: ["Option 1", "Option 2", "Option 3", "Option 4"],
-                    selectedOption: .constant("Option 1")
-                )
-            }
-        }
+        VotingOptionsView(
+            options: ["Yes", "No"],
+            selectedOption: .constant(nil)
+        )
         .previewLayout(.sizeThatFits)
         .padding()
     }
